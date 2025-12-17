@@ -1,0 +1,13 @@
+project_id = "zmdqloustkrtaeumkrau"
+
+[functions.search-tmdb]
+verify_jwt = false
+
+[functions.get-tmdb-details]
+verify_jwt = false
+
+[functions.upload-to-idrivee2]
+verify_jwt = true
+
+[functions.send-rental-expiry-notification]
+verify_jwt = false
