@@ -7,6 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
 import Hls from "hls.js";
+import { useNativeMobile } from "@/hooks/useNativeMobile";
+import { useScreenOrientation } from "@/hooks/useScreenOrientation";
+import { EpisodeListDrawer } from "@/components/watch/EpisodeListDrawer";
 
 interface Episode {
   id: string;
@@ -45,6 +48,9 @@ export function MobileVideoPlayer({
   const hlsRef = useRef<Hls | null>(null);
   const controlsTimeoutRef = useRef<number | null>(null);
 
+  const { isNative, isAndroid } = useNativeMobile();
+  const { lockLandscape, lockPortrait } = useScreenOrientation();
+
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -54,7 +60,7 @@ export function MobileVideoPlayer({
   const [buffered, setBuffered] = useState(0);
   const [volume, setVolume] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
-  const [showEpisodeList, setShowEpisodeList] = useState(false);
+  const [showEpisodeDrawer, setShowEpisodeDrawer] = useState(false);
 
   // Initialize video source
   useEffect(() => {
@@ -117,9 +123,9 @@ export function MobileVideoPlayer({
     };
   }, [videoUrl, sourceType, autoplay]);
 
-  // Handle fullscreen changes
+  // Handle fullscreen changes with orientation lock
   useEffect(() => {
-    const handleFullscreenChange = () => {
+    const handleFullscreenChange = async () => {
       const isCurrentlyFullscreen = !!document.fullscreenElement;
       setIsFullscreen(isCurrentlyFullscreen);
       
@@ -127,9 +133,17 @@ export function MobileVideoPlayer({
       if (isCurrentlyFullscreen) {
         document.body.classList.add('mobile-fullscreen-active');
         document.body.style.overflow = 'hidden';
+        // Lock to landscape on native Android when entering fullscreen
+        if (isNative && isAndroid) {
+          await lockLandscape();
+        }
       } else {
         document.body.classList.remove('mobile-fullscreen-active');
         document.body.style.overflow = '';
+        // Lock back to portrait on native Android when exiting fullscreen
+        if (isNative && isAndroid) {
+          await lockPortrait();
+        }
       }
     };
 
@@ -139,11 +153,14 @@ export function MobileVideoPlayer({
     return () => {
       document.removeEventListener("fullscreenchange", handleFullscreenChange);
       document.removeEventListener("webkitfullscreenchange", handleFullscreenChange);
-      // Cleanup body styles on unmount
+      // Cleanup body styles and restore portrait on unmount
       document.body.classList.remove('mobile-fullscreen-active');
       document.body.style.overflow = '';
+      if (isNative && isAndroid) {
+        lockPortrait();
+      }
     };
-  }, []);
+  }, [isNative, isAndroid, lockLandscape, lockPortrait]);
 
   // Video event handlers
   useEffect(() => {
@@ -263,7 +280,7 @@ export function MobileVideoPlayer({
   const handleEpisodeClick = useCallback((episode: Episode) => {
     if (onEpisodeSelect) {
       onEpisodeSelect({ id: episode.id, episode_number: episode.episode_number });
-      setShowEpisodeList(false);
+      setShowEpisodeDrawer(false);
     }
   }, [onEpisodeSelect]);
 
@@ -340,7 +357,7 @@ export function MobileVideoPlayer({
                 variant="ghost"
                 size="icon"
                 className="text-white hover:bg-white/20"
-                onClick={() => setShowEpisodeList(!showEpisodeList)}
+                onClick={() => setShowEpisodeDrawer(!showEpisodeDrawer)}
               >
                 <List className="h-5 w-5" />
               </Button>
@@ -436,45 +453,20 @@ export function MobileVideoPlayer({
         </div>
       </div>
 
-      {/* Episode List Panel */}
-      {showEpisodeList && episodes.length > 0 && (
-        <div className="absolute right-0 top-0 bottom-0 w-72 bg-black/95 z-30 overflow-y-auto">
-          <div className="p-4">
-            <h3 className="text-white font-semibold mb-4">Episodes</h3>
-            <div className="space-y-2">
-              {episodes.map((episode) => (
-                <div
-                  key={episode.id}
-                  className={cn(
-                    "p-3 rounded-lg cursor-pointer transition-colors",
-                    episode.id === currentEpisodeId
-                      ? "bg-primary/20 border border-primary"
-                      : "bg-white/10 hover:bg-white/20"
-                  )}
-                  onClick={() => handleEpisodeClick(episode)}
-                >
-                  <div className="flex gap-3">
-                    {episode.thumbnail_url && (
-                      <img
-                        src={episode.thumbnail_url}
-                        alt={episode.title}
-                        className="w-20 h-12 object-cover rounded"
-                      />
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-white text-sm font-medium truncate">
-                        Episode {episode.episode_number}
-                      </p>
-                      <p className="text-white/70 text-xs truncate">
-                        {episode.title}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+      {/* Episode List Drawer */}
+      {showEpisodeDrawer && episodes.length > 0 && (
+        <EpisodeListDrawer
+          episodes={episodes.map(ep => ({
+            id: ep.id,
+            episode_number: ep.episode_number,
+            title: ep.title,
+            thumbnail_url: ep.thumbnail_url,
+          }))}
+          currentEpisodeId={currentEpisodeId}
+          onEpisodeSelect={(ep) => handleEpisodeClick(ep as Episode)}
+          onClose={() => setShowEpisodeDrawer(false)}
+          seriesBackdrop={seriesBackdrop}
+        />
       )}
     </div>
   );

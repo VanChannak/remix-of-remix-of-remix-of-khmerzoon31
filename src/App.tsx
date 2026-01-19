@@ -10,6 +10,7 @@ import { AuthProvider } from "@/hooks/useAuth";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { PageTransition } from "@/components/PageTransition";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { PortraitLockProvider } from "@/components/PortraitLockProvider";
 import Index from "./pages/Index";
 import Admin from "./pages/Admin";
 import AdAnalytics from "./pages/admin/AdAnalytics";
@@ -173,7 +174,9 @@ const App = () => {
             <Sonner />
             <BrowserRouter>
               <AuthProvider>
-                <AnimatedRoutes />
+                <PortraitLockProvider>
+                  <AnimatedRoutes />
+                </PortraitLockProvider>
               </AuthProvider>
             </BrowserRouter>
           </TooltipProvider>

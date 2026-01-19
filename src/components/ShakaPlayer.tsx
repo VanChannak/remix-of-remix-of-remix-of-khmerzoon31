@@ -11,6 +11,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { useDeviceSession } from "@/hooks/useDeviceSession";
 import { useProtectedVideoUrl } from "@/hooks/useProtectedVideoUrl";
 import { useRental } from "@/hooks/useRental";
+import { useNativeMobile } from "@/hooks/useNativeMobile";
+import { useScreenOrientation } from "@/hooks/useScreenOrientation";
 import { 
   Play, 
   Pause, 
@@ -184,6 +186,8 @@ export const ShakaPlayer = ({
   const { user } = useAuth();
   const { hasActiveSubscription, loading: subscriptionLoading } = useSubscription();
   const { getProtectedUrl, loading: protectedUrlLoading } = useProtectedVideoUrl();
+  const { isNative, isAndroid } = useNativeMobile();
+  const { lockLandscape, lockPortrait } = useScreenOrientation();
   
   // For episodes, check rental against the series (mediaId), not the episode
   // For movies, check against the movie (movieId)
@@ -963,16 +967,26 @@ export const ShakaPlayer = ({
     setCurrentTime(value[0]);
   };
 
-  const toggleFullscreen = () => {
+  const toggleFullscreen = async () => {
     if (!containerRef.current) return;
     
     if (!isFullscreen) {
+      // Enter fullscreen
       if (containerRef.current.requestFullscreen) {
-        containerRef.current.requestFullscreen();
+        await containerRef.current.requestFullscreen();
+      }
+      // Lock to landscape on native Android when entering fullscreen
+      if (isNative && isAndroid) {
+        await lockLandscape();
       }
     } else {
+      // Exit fullscreen
       if (document.exitFullscreen) {
-        document.exitFullscreen();
+        await document.exitFullscreen();
+      }
+      // Lock back to portrait on native Android when exiting fullscreen
+      if (isNative && isAndroid) {
+        await lockPortrait();
       }
     }
   };
@@ -1108,17 +1122,31 @@ export const ShakaPlayer = ({
     };
   }, [currentSource, onEnded]);
 
-  // Fullscreen change listener
+  // Fullscreen change listener with orientation handling
   useEffect(() => {
-    const handleFullscreenChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
+    const handleFullscreenChange = async () => {
+      const isNowFullscreen = !!document.fullscreenElement;
+      setIsFullscreen(isNowFullscreen);
+      
+      // Handle orientation on native Android
+      if (isNative && isAndroid) {
+        if (isNowFullscreen) {
+          await lockLandscape();
+        } else {
+          await lockPortrait();
+        }
+      }
     };
 
     document.addEventListener('fullscreenchange', handleFullscreenChange);
     return () => {
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      // Ensure portrait lock is restored when component unmounts
+      if (isNative && isAndroid) {
+        lockPortrait();
+      }
     };
-  }, []);
+  }, [isNative, isAndroid, lockLandscape, lockPortrait]);
 
   // Cleanup sleep timer on unmount
   useEffect(() => {
